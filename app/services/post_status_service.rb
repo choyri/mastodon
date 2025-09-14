@@ -45,7 +45,7 @@ class PostStatusService < BaseService
     validate_media!
     preprocess_attributes!
 
-    if scheduled?
+    if scheduled_in_the_future?
       schedule_status!
     else
       process_status!
@@ -71,13 +71,17 @@ class PostStatusService < BaseService
     @visibility   = @options[:visibility] || @account.user&.setting_default_privacy
     @visibility   = :unlisted if @visibility&.to_sym == :public && @account.silenced?
     @scheduled_at = @options[:scheduled_at]&.to_datetime
-    @scheduled_at = nil if scheduled_in_the_past?
   rescue ArgumentError
     raise ActiveRecord::RecordInvalid
   end
 
   def process_status!
     @status = @account.statuses.new(status_attributes)
+
+    if scheduled_in_the_past?
+      @status.created_at = @scheduled_at
+    end
+
     process_mentions_service.call(@status, save_records: false)
     safeguard_mentions!(@status)
     attach_quote!(@status)
@@ -143,8 +147,10 @@ class PostStatusService < BaseService
     process_hashtags_service.call(@status)
     Trends.tags.register(@status)
     LinkCrawlWorker.perform_async(@status.id)
-    DistributionWorker.perform_async(@status.id)
-    ActivityPub::DistributionWorker.perform_async(@status.id)
+    if !scheduled_in_the_past?
+      DistributionWorker.perform_async(@status.id)
+      ActivityPub::DistributionWorker.perform_async(@status.id)
+    end
     PollExpirationNotifyWorker.perform_at(@status.poll.expires_at, @status.poll.id) if @status.poll
   end
 
@@ -199,6 +205,10 @@ class PostStatusService < BaseService
 
   def scheduled_in_the_past?
     @scheduled_at.present? && @scheduled_at <= Time.now.utc
+  end
+
+  def scheduled_in_the_future?
+    @scheduled_at.present? && @scheduled_at > Time.now.utc
   end
 
   def bump_potential_friendship!
