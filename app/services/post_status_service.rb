@@ -53,7 +53,7 @@ class PostStatusService < BaseService
 
     redis.setex(idempotency_key, 3_600, @status.id) if idempotency_given?
 
-    unless scheduled?
+    unless scheduled_in_the_future?
       postprocess_status!
       bump_potential_friendship!
     end
@@ -147,7 +147,7 @@ class PostStatusService < BaseService
     process_hashtags_service.call(@status)
     Trends.tags.register(@status)
     LinkCrawlWorker.perform_async(@status.id)
-    if !scheduled_in_the_past?
+    unless scheduled?
       DistributionWorker.perform_async(@status.id)
       ActivityPub::DistributionWorker.perform_async(@status.id)
     end
