@@ -5,21 +5,6 @@ class AccountsIndex < Chewy::Index
 
   settings index: index_preset(refresh_interval: '30s'), analysis: {
     filter: {
-      english_stop: {
-        type: 'stop',
-        stopwords: '_english_',
-      },
-
-      english_stemmer: {
-        type: 'stemmer',
-        language: 'english',
-      },
-
-      english_possessive_stemmer: {
-        type: 'stemmer',
-        language: 'possessive_english',
-      },
-
       word_joiner: {
         type: 'shingle',
         output_unigrams: true,
@@ -30,21 +15,17 @@ class AccountsIndex < Chewy::Index
     analyzer: {
       # "The FOOING's bar" becomes "foo bar"
       natural: {
-        tokenizer: 'standard',
+        tokenizer: 'ik_smart',
         filter: %w(
           lowercase
           asciifolding
           cjk_width
-          elision
-          english_possessive_stemmer
-          english_stop
-          english_stemmer
         ),
       },
 
       # "FOO bar" becomes "foo bar"
       verbatim: {
-        tokenizer: 'standard',
+        tokenizer: 'ik_max_word',
         filter: %w(lowercase asciifolding cjk_width),
       },
 
